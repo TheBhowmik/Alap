@@ -5,26 +5,9 @@ peer-to-peer audio/video and a Spring Boot WebSocket endpoint for signaling.
 
 ## System architecture
 
-```mermaid
-flowchart LR
-    A[Browser Client A] <-->|WebRTC audio/video| B[Browser Client B]
-    A <-->|WebRTC audio/video| C[Browser Client C]
-    B <-->|WebRTC audio/video| C
+<img width="1048" height="827" alt="Untitled Map - WebRTC Architecture" src="https://github.com/user-attachments/assets/e39406e0-189a-4d3a-bd66-895d782640c0" />
 
-    A -. SDP offers/answers<br/>ICE candidates .-> S
-    B -. SDP offers/answers<br/>ICE candidates .-> S
-    C -. SDP offers/answers<br/>ICE candidates .-> S
 
-    S[Spring Boot Signaling Server<br/>WebSocket: /signaling?room=<roomId>]
-    S -. Routes signaling messages<br/>within a room .-> A
-    S -. Routes signaling messages<br/>within a room .-> B
-    S -. Routes signaling messages<br/>within a room .-> C
-
-    STUN[Google STUN server]
-    A -. ICE connectivity discovery .-> STUN
-    B -. ICE connectivity discovery .-> STUN
-    C -. ICE connectivity discovery .-> STUN
-```
 
 ### Components
 

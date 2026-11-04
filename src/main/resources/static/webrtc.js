@@ -1,16 +1,31 @@
 const localVideo = document.getElementById('localVideo');
 const remoteVideo = document.getElementById('remoteVideo');
 const startButton = document.getElementById('startButton');
+const roomLink = document.getElementById('roomLink');
 
 let localStream;
 let peerConnection;
 
-// Dynamically use wss:// for production (Render) and ws:// for local testing
+// 1. Room ID Generation and URL handling
+const urlParams = new URLSearchParams(window.location.search);
+let roomId = urlParams.get('room');
+
+if (!roomId) {
+    // Generate an 8-character random room string
+    roomId = Math.random().toString(36).substring(2, 10);
+    // Update the browser URL without reloading the page
+    window.history.pushState({}, '', `?room=${roomId}`);
+}
+
+// Update UI banner
+roomLink.href = window.location.href;
+roomLink.innerText = window.location.href;
+
+// 2. Connect to WebSocket passing the Room ID
 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const wsUrl = `${protocol}//${window.location.host}/signaling`;
+const wsUrl = `${protocol}//${window.location.host}/signaling?room=${roomId}`;
 const signalingSocket = new WebSocket(wsUrl);
 
-// Google's public STUN server helps bypass basic NAT firewalls
 const rtcConfig = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
@@ -68,5 +83,4 @@ startButton.onclick = async () => {
     signalingSocket.send(JSON.stringify({ offer: peerConnection.localDescription }));
 };
 
-// Request camera automatically on page load
 startMedia();

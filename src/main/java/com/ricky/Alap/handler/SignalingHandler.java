@@ -1,5 +1,7 @@
 package com.ricky.Alap.handler;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -13,52 +15,66 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class SignalingHandler extends TextWebSocketHandler {
 
-    // Maps a roomId to a list of connected sessions
     private final Map<String, List<WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
-    // Maps a sessionId to its roomId for quick lookup
     private final Map<String, String> sessionToRoom = new ConcurrentHashMap<>();
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    @Override
-    public void afterConnectionEstablished(WebSocketSession session) {
-        // Extract room ID from URI: ws://localhost:8080/signaling?room=xyz
-        String query = session.getUri().getQuery();
-        String roomId = "default";
-        if (query != null && query.contains("room=")) {
-            roomId = query.split("room=")[1].split("&")[0];
+    // Synchronize to prevent TEXT_PARTIAL_WRITING crashes during rapid ICE floods
+    private void sendMessageSafely(WebSocketSession session, TextMessage message) throws IOException {
+        synchronized (session) {
+            if (session.isOpen()) {
+                session.sendMessage(message);
+            }
         }
-
-        sessionToRoom.put(session.getId(), roomId);
-        roomSessions.computeIfAbsent(roomId, k -> new CopyOnWriteArrayList<>()).add(session);
-        System.out.println("Session " + session.getId() + " joined room: " + roomId);
     }
 
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
-        String roomId = sessionToRoom.get(session.getId());
-        if (roomId == null) return;
+    public void afterConnectionEstablished(WebSocketSession session) throws Exception {
+        String query = session.getUri().getQuery();
+        String roomId = (query != null && query.contains("room=")) ? query.split("room=")[1].split("&")[0] : "default";
 
-        // Broadcast only to sessions in the same room
-        List<WebSocketSession> sessions = roomSessions.get(roomId);
-        if (sessions != null) {
-            for (WebSocketSession webSocketSession : sessions) {
-                if (webSocketSession.isOpen() && !session.getId().equals(webSocketSession.getId())) {
-                    webSocketSession.sendMessage(message);
+        sessionToRoom.put(session.getId(), roomId);
+        List<WebSocketSession> room = roomSessions.computeIfAbsent(roomId, k -> new CopyOnWriteArrayList<>());
+
+        sendMessageSafely(session, new TextMessage("{\"type\":\"init\", \"id\":\"" + session.getId() + "\"}"));
+
+        TextMessage joinedMessage = new TextMessage("{\"type\":\"user-joined\", \"id\":\"" + session.getId() + "\"}");
+        for (WebSocketSession s : room) {
+            sendMessageSafely(s, joinedMessage);
+        }
+
+        room.add(session);
+    }
+
+    @Override
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        JsonNode json = mapper.readTree(message.getPayload());
+        String targetId = json.has("target") ? json.get("target").asText() : null;
+        String roomId = sessionToRoom.get(session.getId());
+
+        if (roomId != null && targetId != null) {
+            List<WebSocketSession> room = roomSessions.get(roomId);
+            for (WebSocketSession s : room) {
+                if (s.getId().equals(targetId)) {
+                    sendMessageSafely(s, message);
+                    break;
                 }
             }
         }
     }
 
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         String roomId = sessionToRoom.remove(session.getId());
         if (roomId != null) {
-            List<WebSocketSession> sessions = roomSessions.get(roomId);
-            if (sessions != null) {
-                sessions.remove(session);
-                // Memory management: clean up empty rooms
-                if (sessions.isEmpty()) {
-                    roomSessions.remove(roomId);
+            List<WebSocketSession> room = roomSessions.get(roomId);
+            if (room != null) {
+                room.remove(session);
+                TextMessage leftMessage = new TextMessage("{\"type\":\"user-left\", \"id\":\"" + session.getId() + "\"}");
+                for (WebSocketSession s : room) {
+                    sendMessageSafely(s, leftMessage);
                 }
+                if (room.isEmpty()) roomSessions.remove(roomId);
             }
         }
     }

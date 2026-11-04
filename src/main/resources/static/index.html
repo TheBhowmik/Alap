@@ -3,30 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alap - Isolated Rooms</title>
+    <title>Alap - Group Video Call</title>
     <style>
         body { background-color: #121212; color: #ffffff; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
         .room-banner { background: #222; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 600px; border: 1px solid #444; }
         .room-banner a { color: #00ffff; text-decoration: none; font-weight: bold; word-break: break-all; }
-        .video-container { display: flex; justify-content: center; gap: 20px; margin-top: 20px; flex-wrap: wrap; }
-        video { background: #000; border-radius: 8px; width: 45%; max-width: 600px; border: 1px solid #333; }
-        button { background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 10px; }
-        button:hover { background-color: #0056b3; }
+        /* Grid adjusts automatically as people join */
+        .video-grid { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
+        video { background: #000; border-radius: 8px; width: 300px; height: 225px; border: 1px solid #333; object-fit: cover; }
     </style>
 </head>
 <body>
-<h2>Alap Video Call</h2>
-
+<h2>Alap Group Call</h2>
 <div class="room-banner">
-    <p>Share this link to invite someone to your private room:</p>
+    <p>Share this link to invite others to this group:</p>
     <a id="roomLink" href="#" target="_blank">Generating link...</a>
 </div>
 
-<button id="startButton">Start Call</button>
-
-<div class="video-container">
+<div class="video-grid" id="videoGrid">
+    <!-- Local video stays pinned here -->
     <video id="localVideo" autoplay muted playsinline></video>
-    <video id="remoteVideo" autoplay playsinline></video>
 </div>
 
 <script src="webrtc.js"></script>

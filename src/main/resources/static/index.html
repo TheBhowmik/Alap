@@ -4,24 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alap - Group Video Call</title>
-    <style>
-        body { background-color: #121212; color: #ffffff; font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }
-        .room-banner { background: #222; padding: 15px; border-radius: 8px; margin: 10px auto; max-width: 600px; border: 1px solid #444; }
-        .room-banner a { color: #00ffff; text-decoration: none; font-weight: bold; word-break: break-all; }
-        /* Grid adjusts automatically as people join */
-        .video-grid { display: flex; justify-content: center; gap: 15px; margin-top: 20px; flex-wrap: wrap; }
-        video { background: #000; border-radius: 8px; width: 300px; height: 225px; border: 1px solid #333; object-fit: cover; }
-    </style>
+    <!-- Link to the external CSS file -->
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <h2>Alap Group Call</h2>
+
 <div class="room-banner">
     <p>Share this link to invite others to this group:</p>
     <a id="roomLink" href="#" target="_blank">Generating link...</a>
 </div>
 
 <div class="video-grid" id="videoGrid">
-    <!-- Local video stays pinned here -->
     <video id="localVideo" autoplay muted playsinline></video>
 </div>
 

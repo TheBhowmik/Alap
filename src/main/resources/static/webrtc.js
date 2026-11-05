@@ -16,6 +16,10 @@ const sendChatBtn = document.getElementById('sendChatBtn');
 const chatMessages = document.getElementById('chatMessages');
 const closeChatBtn = document.getElementById('closeChatBtn');
 
+// File Sharing DOM Elements
+const attachBtn = document.getElementById('attachBtn');
+const fileInput = document.getElementById('fileInput');
+
 // --- State Variables ---
 let localStream;
 let signalingSocket;
@@ -27,6 +31,10 @@ const iceCandidatesQueue = {};
 
 let screenStream = null;
 let isSharingScreen = false;
+
+// File Sharing Buffers
+const incomingFiles = {};
+const CHUNK_SIZE = 16384; // 16KB chunks
 
 const rtcConfig = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -148,6 +156,17 @@ function createPeerConnection(peerId) {
     const pc = new RTCPeerConnection(rtcConfig);
     peers[peerId] = pc;
     iceCandidatesQueue[peerId] = [];
+
+    // --- Create local Data Channel for SENDING files ---
+    const dataChannel = pc.createDataChannel('fileTransfer');
+    peers[peerId].sendChannel = dataChannel;
+
+    // --- Listen for remote Data Channel for RECEIVING files ---
+    pc.ondatachannel = (event) => {
+        const receiveChannel = event.channel;
+        receiveChannel.binaryType = 'arraybuffer';
+        receiveChannel.onmessage = (e) => handleReceiveData(peerId, e);
+    };
 
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
@@ -305,7 +324,107 @@ function appendChatMessage(sender, text, type) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// --- 9. Media Controls & Leave Call Logic ---
+// --- Peer-to-Peer File Sharing Logic ---
+if (attachBtn && fileInput) {
+    attachBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        if (file.size > 15 * 1024 * 1024) {
+            alert("Please select a file smaller than 15MB.");
+            return;
+        }
+
+        appendFileMessage("You", file.name, null, "self");
+        const meta = JSON.stringify({ type: 'file-meta', name: file.name, size: file.size });
+
+        for (let peerId in peers) {
+            const dc = peers[peerId].sendChannel;
+            if (dc && dc.readyState === 'open') dc.send(meta);
+        }
+
+        const buffer = await file.arrayBuffer();
+
+        function sendChunks(offset) {
+            if (offset >= buffer.byteLength) return;
+
+            const chunk = buffer.slice(offset, offset + CHUNK_SIZE);
+            for (let peerId in peers) {
+                const dc = peers[peerId].sendChannel;
+                if (dc && dc.readyState === 'open') dc.send(chunk);
+            }
+
+            setTimeout(() => sendChunks(offset + CHUNK_SIZE), 5);
+        }
+
+        sendChunks(0);
+        fileInput.value = "";
+    });
+}
+
+function handleReceiveData(peerId, event) {
+    if (typeof event.data === 'string') {
+        const data = JSON.parse(event.data);
+        if (data.type === 'file-meta') {
+            incomingFiles[peerId] = {
+                name: data.name,
+                size: data.size,
+                buffer: [],
+                receivedSize: 0
+            };
+        }
+    }
+    else if (event.data instanceof ArrayBuffer) {
+        const fileSession = incomingFiles[peerId];
+        if (fileSession) {
+            fileSession.buffer.push(event.data);
+            fileSession.receivedSize += event.data.byteLength;
+
+            if (fileSession.receivedSize === fileSession.size) {
+                const blob = new Blob(fileSession.buffer);
+                const downloadUrl = URL.createObjectURL(blob);
+
+                const senderName = peerNames[peerId] || "Guest";
+                appendFileMessage(senderName, fileSession.name, downloadUrl, "other");
+
+                delete incomingFiles[peerId];
+
+                if (!chatPanel.classList.contains('open')) chatPanel.classList.add('open');
+            }
+        }
+    }
+}
+
+function appendFileMessage(sender, fileName, downloadUrl, type) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-message ${type}`;
+
+    const nameSpan = document.createElement('div');
+    nameSpan.className = 'sender-name';
+    nameSpan.innerText = sender;
+
+    const fileCard = document.createElement('div');
+    fileCard.className = 'file-message';
+    fileCard.innerText = `📄 ${fileName}`;
+
+    if (downloadUrl) {
+        const downloadBtn = document.createElement('a');
+        downloadBtn.href = downloadUrl;
+        downloadBtn.download = fileName;
+        downloadBtn.innerText = "Download";
+        fileCard.appendChild(downloadBtn);
+    }
+
+    msgDiv.appendChild(nameSpan);
+    msgDiv.appendChild(fileCard);
+
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// --- Media Controls & Leave Call Logic ---
 
 const toggleAudioBtn = document.getElementById('toggleAudioBtn');
 const toggleVideoBtn = document.getElementById('toggleVideoBtn');
@@ -322,7 +441,7 @@ if (toggleAudioBtn) {
             const audioTrack = localStream.getAudioTracks()[0];
             if (audioTrack) {
                 isAudioMuted = !isAudioMuted;
-                audioTrack.enabled = !isAudioMuted; // Disables mic without dropping connection
+                audioTrack.enabled = !isAudioMuted;
 
                 toggleAudioBtn.innerText = isAudioMuted ? "Unmute Mic" : "Mute Mic";
                 toggleAudioBtn.classList.toggle('muted', isAudioMuted);
@@ -338,7 +457,7 @@ if (toggleVideoBtn) {
             const videoTrack = localStream.getVideoTracks()[0];
             if (videoTrack) {
                 isVideoOff = !isVideoOff;
-                videoTrack.enabled = !isVideoOff; // Sends black frames without dropping connection
+                videoTrack.enabled = !isVideoOff;
 
                 toggleVideoBtn.innerText = isVideoOff ? "Turn On Camera" : "Turn Off Camera";
                 toggleVideoBtn.classList.toggle('muted', isVideoOff);
@@ -350,7 +469,6 @@ if (toggleVideoBtn) {
 // Leave Call securely
 if (leaveCallBtn) {
     leaveCallBtn.addEventListener('click', () => {
-        // 1. Stop local hardware media (turns off webcam light)
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
         }
@@ -358,7 +476,6 @@ if (leaveCallBtn) {
             screenStream.getTracks().forEach(track => track.stop());
         }
 
-        // 2. Destroy all WebRTC Peer Connections
         for (let peerId in peers) {
             if (peers[peerId]) {
                 peers[peerId].close();
@@ -366,12 +483,10 @@ if (leaveCallBtn) {
             }
         }
 
-        // 3. Disconnect from Spring Boot WebSocket
         if (signalingSocket) {
             signalingSocket.close();
         }
 
-        // 4. Hide Main UI and Show Leave Screen
         document.querySelector('h2').style.display = 'none';
         document.querySelector('.room-banner').style.display = 'none';
         document.querySelector('.controls').style.display = 'none';

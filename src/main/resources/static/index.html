@@ -24,6 +24,7 @@
     <a id="roomLink" href="#" target="_blank">Generating link...</a>
 </div>
 
+<!-- Meeting Controls -->
 <div class="controls">
     <button id="toggleAudioBtn">Mute Mic</button>
     <button id="toggleVideoBtn">Turn Off Camera</button>
@@ -32,26 +33,33 @@
     <button id="leaveCallBtn" class="leave-btn">Leave Call</button>
 </div>
 
+<!-- Video Grid -->
 <div class="video-grid" id="videoGrid">
-    <!-- Local video is wrapped to support the name tag overlay -->
     <div class="video-wrapper" id="wrapper-local">
         <video id="localVideo" autoplay muted playsinline></video>
         <div class="name-tag" id="localName">You</div>
     </div>
 </div>
 
+<!-- Sliding Chat Panel with File Sharing -->
 <div id="chatPanel" class="chat-panel">
     <div class="chat-header">
         Meeting Chat
         <button id="closeChatBtn" class="close-chat-btn">&times;</button>
     </div>
     <div id="chatMessages" class="chat-messages"></div>
+
+    <!-- Updated Chat Input Area with Attachment Button -->
     <div class="chat-input-area">
+        <button id="attachBtn" class="attach-btn">📎</button>
+        <input type="file" id="fileInput" style="display: none;" />
+
         <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off" />
         <button id="sendChatBtn">Send</button>
     </div>
 </div>
 
+<!-- Leave Screen -->
 <div id="leaveScreen" class="leave-screen" style="display: none;">
     <div class="leave-content">
         <h2>You have left the meeting</h2>

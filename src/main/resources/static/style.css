@@ -76,6 +76,22 @@ button.sharing-active:hover {
     background-color: #c9302c;
 }
 
+button.leave-btn {
+    background-color: #d9534f; /* Red */
+}
+
+button.leave-btn:hover {
+    background-color: #c9302c;
+}
+
+button.muted {
+    background-color: #708090; /* Slate Grey to indicate it is turned off */
+}
+
+button.muted:hover {
+    background-color: #5a6876;
+}
+
 /* Video Grid & Name Tags */
 .video-grid {
     display: flex;
@@ -169,7 +185,6 @@ video {
     right: 0;
 }
 
-/* Update this block */
 .chat-header {
     padding: 20px;
     background-color: #f4f7f9;
@@ -181,7 +196,6 @@ video {
     align-items: center;
 }
 
-/* Add this new block right below it */
 .close-chat-btn {
     background: transparent;
     border: none;
@@ -195,9 +209,9 @@ video {
 }
 
 .close-chat-btn:hover {
-    background: transparent; /* Overrides your global button hover */
-    color: #d9534f; /* Soft red */
-    transform: scale(1.1); /* Slight pop effect */
+    background: transparent;
+    color: #d9534f;
+    transform: scale(1.1);
 }
 
 .chat-messages {
@@ -246,9 +260,10 @@ video {
     display: flex;
     gap: 10px;
     background: #ffffff;
+    align-items: center;
 }
 
-.chat-input-area input {
+.chat-input-area input[type="text"] {
     flex-grow: 1;
     padding: 10px;
     border: 1px solid #e1e8ed;
@@ -256,33 +271,61 @@ video {
     outline: none;
 }
 
-.chat-input-area input:focus {
+.chat-input-area input[type="text"]:focus {
     border-color: #2c5f6a;
 }
 
-.chat-input-area button {
+.chat-input-area button#sendChatBtn {
     margin-top: 0;
     padding: 8px 16px;
 }
 
-/* --- Media Controls & Leave Screen Styles --- */
-
-button.leave-btn {
-    background-color: #d9534f; /* Red */
+/* --- Peer-to-Peer File Sharing Styles --- */
+.attach-btn {
+    background-color: transparent;
+    color: #4a4a4a;
+    font-size: 18px;
+    padding: 8px;
+    margin-top: 0;
+    border-radius: 50%;
+    border: 2px solid #e1e8ed;
 }
 
-button.leave-btn:hover {
-    background-color: #c9302c;
+.attach-btn:hover {
+    background-color: #f4f7f9;
+    border-color: #2c5f6a;
+    transform: translateY(0);
 }
 
-button.muted {
-    background-color: #708090; /* Slate Grey to indicate it is turned off */
+.file-message {
+    background-color: #e8f0fe;
+    border: 1px solid #cce0ff;
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 5px;
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
 }
 
-button.muted:hover {
-    background-color: #5a6876;
+.file-message a {
+    color: #2c5f6a;
+    font-weight: bold;
+    text-decoration: none;
+    background: #ffffff;
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-align: center;
+    border: 1px solid #2c5f6a;
 }
 
+.file-message a:hover {
+    background: #2c5f6a;
+    color: white;
+}
+
+/* --- Leave Screen Styles --- */
 .leave-screen {
     position: fixed; top: 0; left: 0; width: 100%; height: 100vh;
     background: #f4f7f9;

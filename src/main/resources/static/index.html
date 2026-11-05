@@ -4,10 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alap - Group Video Call</title>
-    <!-- Link to the external CSS file -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Name Entry Modal -->
+<div id="nameModal" class="modal">
+    <div class="modal-content">
+        <h3>Welcome to Alap</h3>
+        <p>Enter your name to join the room</p>
+        <input type="text" id="userNameInput" placeholder="Your Name" autocomplete="off" />
+        <button id="joinBtn">Join Room</button>
+    </div>
+</div>
+
 <h2>Alap Group Call</h2>
 
 <div class="room-banner">
@@ -16,7 +25,11 @@
 </div>
 
 <div class="video-grid" id="videoGrid">
-    <video id="localVideo" autoplay muted playsinline></video>
+    <!-- Local video is now inside a relative wrapper -->
+    <div class="video-wrapper" id="wrapper-local">
+        <video id="localVideo" autoplay muted playsinline></video>
+        <div class="name-tag" id="localName">You</div>
+    </div>
 </div>
 
 <script src="webrtc.js"></script>

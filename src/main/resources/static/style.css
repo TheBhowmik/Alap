@@ -77,3 +77,59 @@ button:hover {
     background-color: #1a3c44;
     transform: translateY(-1px);
 }
+
+/* Modal Styles */
+.modal {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(255, 255, 255, 0.9); /* Matches light theme */
+    backdrop-filter: blur(5px);
+    display: flex; justify-content: center; align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    border: 1px solid #e1e8ed;
+}
+
+.modal-content input {
+    width: 80%;
+    padding: 12px;
+    margin: 15px 0;
+    border: 2px solid #e1e8ed;
+    border-radius: 8px;
+    font-size: 16px;
+    color: #4a4a4a;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.modal-content input:focus {
+    border-color: #2c5f6a;
+}
+
+/* Video Wrapper & Name Tags */
+.video-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+.name-tag {
+    position: absolute;
+    bottom: 15px;
+    left: 15px;
+    background: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    pointer-events: none; /* Prevents blocking right-clicks on the video */
+    backdrop-filter: blur(2px);
+}

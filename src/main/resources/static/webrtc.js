@@ -1,3 +1,4 @@
+// --- DOM Elements ---
 const localVideo = document.getElementById('localVideo');
 const videoGrid = document.getElementById('videoGrid');
 const roomLink = document.getElementById('roomLink');
@@ -6,14 +7,21 @@ const localNameDisplay = document.getElementById('localName');
 const nameModal = document.getElementById('nameModal');
 const joinBtn = document.getElementById('joinBtn');
 const userNameInput = document.getElementById('userNameInput');
-const shareScreenBtn = document.getElementById('shareScreenBtn');
 
+const shareScreenBtn = document.getElementById('shareScreenBtn');
+const toggleChatBtn = document.getElementById('toggleChatBtn');
+const chatPanel = document.getElementById('chatPanel');
+const chatInput = document.getElementById('chatInput');
+const sendChatBtn = document.getElementById('sendChatBtn');
+const chatMessages = document.getElementById('chatMessages');
+
+// --- State Variables ---
 let localStream;
 let signalingSocket;
 let myId;
 let myName = "Guest";
 const peers = {};
-const peerNames = {}; // Dictionary to safely store real names
+const peerNames = {};
 const iceCandidatesQueue = {};
 
 let screenStream = null;
@@ -23,7 +31,7 @@ const rtcConfig = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
-// 1. URL Setup & Room Generation
+// --- URL Setup & Room Generation ---
 const urlParams = new URLSearchParams(window.location.search);
 let roomId = urlParams.get('room');
 if (!roomId) {
@@ -33,23 +41,22 @@ if (!roomId) {
 roomLink.href = window.location.href;
 roomLink.innerText = window.location.href;
 
-// 2. Name Entry Modal Logic
+// --- Name Entry Modal Logic ---
 joinBtn.addEventListener('click', () => {
     const val = userNameInput.value.trim();
     if (val) {
         myName = val;
         localNameDisplay.innerText = myName + " (You)";
         nameModal.style.display = 'none';
-        initApp(); // Start camera and WebSocket only after name is entered
+        initApp();
     }
 });
 
-// Allow hitting "Enter" to join
 userNameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') joinBtn.click();
 });
 
-// 3. Initialize Media and Application
+// --- Initialize Media ---
 async function initApp() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -61,7 +68,7 @@ async function initApp() {
     }
 }
 
-// 4. WebSocket & Signaling Logic
+// --- WebSocket & Signaling Logic ---
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     signalingSocket = new WebSocket(`${protocol}//${window.location.host}/signaling?room=${roomId}`);
@@ -91,13 +98,22 @@ function connectWebSocket() {
         else if (data.target === myId) {
             const peerId = data.sender;
 
-            // Always store the freshest name we receive from this peer
+            // Store the freshest name received
             if (data.senderName) {
                 peerNames[peerId] = data.senderName;
-                setPeerName(peerId, data.senderName); // Update UI if it exists already
+                setPeerName(peerId, data.senderName);
             }
 
-            if (data.type === 'offer') {
+            // Handle Chat Intercept
+            if (data.type === 'chat') {
+                const incomingName = peerNames[peerId] || "Guest";
+                appendChatMessage(incomingName, data.message, "other");
+
+                if (!chatPanel.classList.contains('open')) {
+                    chatPanel.classList.add('open');
+                }
+            }
+            else if (data.type === 'offer') {
                 createPeerConnection(peerId);
                 await peers[peerId].setRemoteDescription(new RTCSessionDescription(data.offer));
                 const answer = await peers[peerId].createAnswer();
@@ -124,38 +140,7 @@ function connectWebSocket() {
     };
 }
 
-// 5. Helper Functions
-function processIceQueue(peerId) {
-    if (iceCandidatesQueue[peerId]) {
-        iceCandidatesQueue[peerId].forEach(candidate => {
-            peers[peerId].addIceCandidate(candidate).catch(e => console.error("Error adding queued ICE", e));
-        });
-        iceCandidatesQueue[peerId] = [];
-    }
-}
-
-function sendSignal(type, targetId, payload) {
-    if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
-        signalingSocket.send(JSON.stringify({
-            type: type,
-            sender: myId,
-            senderName: myName,
-            target: targetId,
-            ...payload
-        }));
-    } else {
-        console.warn("Blocked signal transmission: WebSocket is closed.");
-    }
-}
-
-function setPeerName(peerId, name) {
-    const nameTag = document.getElementById('name-' + peerId);
-    if (nameTag && name) {
-        nameTag.innerText = name;
-    }
-}
-
-// 6. WebRTC Peer Connection Setup
+// --- WebRTC Peer Connection Setup ---
 function createPeerConnection(peerId) {
     if (peers[peerId]) return;
 
@@ -180,8 +165,6 @@ function createPeerConnection(peerId) {
             const nameTag = document.createElement('div');
             nameTag.id = 'name-' + peerId;
             nameTag.className = 'name-tag';
-
-            // Pull the latest name from the dictionary, fallback to Connecting...
             nameTag.innerText = peerNames[peerId] || "Connecting...";
 
             wrapper.appendChild(video);
@@ -198,73 +181,119 @@ function createPeerConnection(peerId) {
     };
 }
 
-// 7. Screen Sharing Logic
-if (shareScreenBtn) {
-    shareScreenBtn.addEventListener('click', async () => {
-        if (!isSharingScreen) {
-            try {
-                // Ask the user for screen permissions
-                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-                const screenTrack = screenStream.getVideoTracks()[0];
-
-                // Swap the webcam track with the screen track for ALL connected peers
-                for (let peerId in peers) {
-                    const sender = peers[peerId].getSenders().find(s => s.track.kind === 'video');
-                    if (sender) {
-                        sender.replaceTrack(screenTrack);
-                    }
-                }
-
-                // Update our local video element to show the screen
-                localVideo.srcObject = screenStream;
-
-                // Update UI
-                isSharingScreen = true;
-                shareScreenBtn.innerText = "Stop Sharing";
-                shareScreenBtn.classList.add("sharing-active");
-
-                // Listen for the native browser "Stop sharing" popup button
-                screenTrack.onended = () => {
-                    stopScreenShare();
-                };
-
-            } catch (error) {
-                console.error("Error sharing screen or user canceled:", error);
-            }
-        } else {
-            // User clicked our custom button to stop sharing
-            stopScreenShare();
-        }
-    });
+function processIceQueue(peerId) {
+    if (iceCandidatesQueue[peerId]) {
+        iceCandidatesQueue[peerId].forEach(candidate => {
+            peers[peerId].addIceCandidate(candidate).catch(e => console.error("Error adding queued ICE", e));
+        });
+        iceCandidatesQueue[peerId] = [];
+    }
 }
+
+function sendSignal(type, targetId, payload) {
+    if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
+        signalingSocket.send(JSON.stringify({
+            type: type,
+            sender: myId,
+            senderName: myName,
+            target: targetId,
+            ...payload
+        }));
+    }
+}
+
+function setPeerName(peerId, name) {
+    const nameTag = document.getElementById('name-' + peerId);
+    if (nameTag && name) {
+        nameTag.innerText = name;
+    }
+}
+
+// --- Screen Sharing Logic ---
+shareScreenBtn.addEventListener('click', async () => {
+    if (!isSharingScreen) {
+        try {
+            screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+            const screenTrack = screenStream.getVideoTracks()[0];
+
+            for (let peerId in peers) {
+                const sender = peers[peerId].getSenders().find(s => s.track.kind === 'video');
+                if (sender) sender.replaceTrack(screenTrack);
+            }
+
+            localVideo.srcObject = screenStream;
+            isSharingScreen = true;
+            shareScreenBtn.innerText = "Stop Sharing";
+            shareScreenBtn.classList.add("sharing-active");
+
+            screenTrack.onended = stopScreenShare;
+        } catch (error) {
+            console.error("Error sharing screen or user canceled:", error);
+        }
+    } else {
+        stopScreenShare();
+    }
+});
 
 function stopScreenShare() {
     if (!isSharingScreen) return;
 
-    // Grab the original webcam video track
     const webcamTrack = localStream.getVideoTracks()[0];
 
-    // Swap the screen track back to the webcam track for ALL peers
     for (let peerId in peers) {
         const sender = peers[peerId].getSenders().find(s => s.track.kind === 'video');
-        if (sender) {
-            sender.replaceTrack(webcamTrack);
-        }
+        if (sender) sender.replaceTrack(webcamTrack);
     }
 
-    // Revert our local video element
     localVideo.srcObject = localStream;
 
-    // Turn off the screen sharing stream to save memory
     if (screenStream) {
         screenStream.getTracks().forEach(track => track.stop());
         screenStream = null;
     }
 
-    // Revert UI
     isSharingScreen = false;
-    if (shareScreenBtn) {
-        shareScreenBtn.innerText = "Share Screen";
-        shareScreenBtn.classList.remove("sharing-active");
+    shareScreenBtn.innerText = "Share Screen";
+    shareScreenBtn.classList.remove("sharing-active");
+}
+
+// --- In-Call Text Chat Logic ---
+toggleChatBtn.addEventListener('click', () => {
+    chatPanel.classList.toggle('open');
+});
+
+function sendChatMessage() {
+    const text = chatInput.value.trim();
+    if (text) {
+        appendChatMessage("You", text, "self");
+
+        for (let peerId in peers) {
+            sendSignal('chat', peerId, { message: text });
+        }
+
+        chatInput.value = "";
     }
+}
+
+sendChatBtn.addEventListener('click', sendChatMessage);
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') sendChatMessage();
+});
+
+function appendChatMessage(sender, text, type) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-message ${type}`;
+
+    const nameSpan = document.createElement('div');
+    nameSpan.className = 'sender-name';
+    nameSpan.innerText = sender;
+
+    const textSpan = document.createElement('div');
+    textSpan.innerText = text;
+
+    msgDiv.appendChild(nameSpan);
+    msgDiv.appendChild(textSpan);
+
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
 }

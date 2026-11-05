@@ -169,12 +169,35 @@ video {
     right: 0;
 }
 
+/* Update this block */
 .chat-header {
     padding: 20px;
     background-color: #f4f7f9;
     color: #333333;
     font-weight: 600;
     border-bottom: 1px solid #e1e8ed;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Add this new block right below it */
+.close-chat-btn {
+    background: transparent;
+    border: none;
+    color: #666666;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    transition: color 0.2s ease;
+}
+
+.close-chat-btn:hover {
+    background: transparent; /* Overrides your global button hover */
+    color: #d9534f; /* Soft red */
+    transform: scale(1.1); /* Slight pop effect */
 }
 
 .chat-messages {
@@ -240,4 +263,42 @@ video {
 .chat-input-area button {
     margin-top: 0;
     padding: 8px 16px;
+}
+
+/* --- Media Controls & Leave Screen Styles --- */
+
+button.leave-btn {
+    background-color: #d9534f; /* Red */
+}
+
+button.leave-btn:hover {
+    background-color: #c9302c;
+}
+
+button.muted {
+    background-color: #708090; /* Slate Grey to indicate it is turned off */
+}
+
+button.muted:hover {
+    background-color: #5a6876;
+}
+
+.leave-screen {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100vh;
+    background: #f4f7f9;
+    display: flex; justify-content: center; align-items: center;
+    z-index: 2000;
+}
+
+.leave-content {
+    background: #ffffff;
+    padding: 50px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e1e8ed;
+    text-align: center;
+}
+
+.leave-content h2 {
+    margin-top: 0;
 }

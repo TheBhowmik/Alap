@@ -14,6 +14,7 @@ const chatPanel = document.getElementById('chatPanel');
 const chatInput = document.getElementById('chatInput');
 const sendChatBtn = document.getElementById('sendChatBtn');
 const chatMessages = document.getElementById('chatMessages');
+const closeChatBtn = document.getElementById('closeChatBtn');
 
 // --- State Variables ---
 let localStream;
@@ -262,6 +263,12 @@ toggleChatBtn.addEventListener('click', () => {
     chatPanel.classList.toggle('open');
 });
 
+if (closeChatBtn) {
+    closeChatBtn.addEventListener('click', () => {
+        chatPanel.classList.remove('open');
+    });
+}
+
 function sendChatMessage() {
     const text = chatInput.value.trim();
     if (text) {
@@ -296,4 +303,81 @@ function appendChatMessage(sender, text, type) {
 
     chatMessages.appendChild(msgDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// --- 9. Media Controls & Leave Call Logic ---
+
+const toggleAudioBtn = document.getElementById('toggleAudioBtn');
+const toggleVideoBtn = document.getElementById('toggleVideoBtn');
+const leaveCallBtn = document.getElementById('leaveCallBtn');
+const leaveScreen = document.getElementById('leaveScreen');
+
+let isAudioMuted = false;
+let isVideoOff = false;
+
+// Toggle Microphone
+if (toggleAudioBtn) {
+    toggleAudioBtn.addEventListener('click', () => {
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                isAudioMuted = !isAudioMuted;
+                audioTrack.enabled = !isAudioMuted; // Disables mic without dropping connection
+
+                toggleAudioBtn.innerText = isAudioMuted ? "Unmute Mic" : "Mute Mic";
+                toggleAudioBtn.classList.toggle('muted', isAudioMuted);
+            }
+        }
+    });
+}
+
+// Toggle Camera
+if (toggleVideoBtn) {
+    toggleVideoBtn.addEventListener('click', () => {
+        if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                isVideoOff = !isVideoOff;
+                videoTrack.enabled = !isVideoOff; // Sends black frames without dropping connection
+
+                toggleVideoBtn.innerText = isVideoOff ? "Turn On Camera" : "Turn Off Camera";
+                toggleVideoBtn.classList.toggle('muted', isVideoOff);
+            }
+        }
+    });
+}
+
+// Leave Call securely
+if (leaveCallBtn) {
+    leaveCallBtn.addEventListener('click', () => {
+        // 1. Stop local hardware media (turns off webcam light)
+        if (localStream) {
+            localStream.getTracks().forEach(track => track.stop());
+        }
+        if (screenStream) {
+            screenStream.getTracks().forEach(track => track.stop());
+        }
+
+        // 2. Destroy all WebRTC Peer Connections
+        for (let peerId in peers) {
+            if (peers[peerId]) {
+                peers[peerId].close();
+                delete peers[peerId];
+            }
+        }
+
+        // 3. Disconnect from Spring Boot WebSocket
+        if (signalingSocket) {
+            signalingSocket.close();
+        }
+
+        // 4. Hide Main UI and Show Leave Screen
+        document.querySelector('h2').style.display = 'none';
+        document.querySelector('.room-banner').style.display = 'none';
+        document.querySelector('.controls').style.display = 'none';
+        document.getElementById('videoGrid').style.display = 'none';
+        document.getElementById('chatPanel').style.display = 'none';
+
+        leaveScreen.style.display = 'flex';
+    });
 }

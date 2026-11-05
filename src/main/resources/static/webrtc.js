@@ -6,18 +6,24 @@ const localNameDisplay = document.getElementById('localName');
 const nameModal = document.getElementById('nameModal');
 const joinBtn = document.getElementById('joinBtn');
 const userNameInput = document.getElementById('userNameInput');
+const shareScreenBtn = document.getElementById('shareScreenBtn');
 
 let localStream;
 let signalingSocket;
 let myId;
 let myName = "Guest";
 const peers = {};
+const peerNames = {}; // Dictionary to safely store real names
 const iceCandidatesQueue = {};
+
+let screenStream = null;
+let isSharingScreen = false;
 
 const rtcConfig = {
     iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
+// 1. URL Setup & Room Generation
 const urlParams = new URLSearchParams(window.location.search);
 let roomId = urlParams.get('room');
 if (!roomId) {
@@ -27,14 +33,14 @@ if (!roomId) {
 roomLink.href = window.location.href;
 roomLink.innerText = window.location.href;
 
-// 1. Wait for User Name Before Starting
+// 2. Name Entry Modal Logic
 joinBtn.addEventListener('click', () => {
     const val = userNameInput.value.trim();
     if (val) {
         myName = val;
         localNameDisplay.innerText = myName + " (You)";
         nameModal.style.display = 'none';
-        initApp(); // Start camera and WebSocket
+        initApp(); // Start camera and WebSocket only after name is entered
     }
 });
 
@@ -43,6 +49,7 @@ userNameInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') joinBtn.click();
 });
 
+// 3. Initialize Media and Application
 async function initApp() {
     try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -54,6 +61,7 @@ async function initApp() {
     }
 }
 
+// 4. WebSocket & Signaling Logic
 function connectWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     signalingSocket = new WebSocket(`${protocol}//${window.location.host}/signaling?room=${roomId}`);
@@ -66,8 +74,7 @@ function connectWebSocket() {
         }
         else if (data.type === 'user-joined') {
             const peerId = data.id;
-            // Existing user sees someone join, preps a container with a placeholder name
-            createPeerConnection(peerId, "Connecting...");
+            createPeerConnection(peerId);
             const offer = await peers[peerId].createOffer();
             await peers[peerId].setLocalDescription(offer);
             sendSignal('offer', peerId, { offer: peers[peerId].localDescription });
@@ -77,16 +84,21 @@ function connectWebSocket() {
                 peers[data.id].close();
                 delete peers[data.id];
                 delete iceCandidatesQueue[data.id];
-                // Remove the wrapper div, not just the video
+                delete peerNames[data.id];
                 document.getElementById('wrapper-' + data.id)?.remove();
             }
         }
         else if (data.target === myId) {
             const peerId = data.sender;
-            const peerName = data.senderName || "Guest"; // Read incoming name
+
+            // Always store the freshest name we receive from this peer
+            if (data.senderName) {
+                peerNames[peerId] = data.senderName;
+                setPeerName(peerId, data.senderName); // Update UI if it exists already
+            }
 
             if (data.type === 'offer') {
-                createPeerConnection(peerId, peerName);
+                createPeerConnection(peerId);
                 await peers[peerId].setRemoteDescription(new RTCSessionDescription(data.offer));
                 const answer = await peers[peerId].createAnswer();
                 await peers[peerId].setLocalDescription(answer);
@@ -94,12 +106,11 @@ function connectWebSocket() {
                 processIceQueue(peerId);
             }
             else if (data.type === 'answer') {
-                setPeerName(peerId, peerName); // Update placeholder to actual name
                 await peers[peerId].setRemoteDescription(new RTCSessionDescription(data.answer));
                 processIceQueue(peerId);
             }
             else if (data.type === 'candidate') {
-                if (!peers[peerId]) createPeerConnection(peerId, peerName);
+                if (!peers[peerId]) createPeerConnection(peerId);
 
                 const candidate = new RTCIceCandidate(data.candidate);
                 if (peers[peerId].remoteDescription && peers[peerId].remoteDescription.type) {
@@ -113,6 +124,7 @@ function connectWebSocket() {
     };
 }
 
+// 5. Helper Functions
 function processIceQueue(peerId) {
     if (iceCandidatesQueue[peerId]) {
         iceCandidatesQueue[peerId].forEach(candidate => {
@@ -122,7 +134,6 @@ function processIceQueue(peerId) {
     }
 }
 
-// 2. Inject `senderName` into every payload
 function sendSignal(type, targetId, payload) {
     if (signalingSocket && signalingSocket.readyState === WebSocket.OPEN) {
         signalingSocket.send(JSON.stringify({
@@ -132,11 +143,20 @@ function sendSignal(type, targetId, payload) {
             target: targetId,
             ...payload
         }));
+    } else {
+        console.warn("Blocked signal transmission: WebSocket is closed.");
     }
 }
 
-// 3. Construct HTML Wrappers for Remote Feeds
-function createPeerConnection(peerId, peerName) {
+function setPeerName(peerId, name) {
+    const nameTag = document.getElementById('name-' + peerId);
+    if (nameTag && name) {
+        nameTag.innerText = name;
+    }
+}
+
+// 6. WebRTC Peer Connection Setup
+function createPeerConnection(peerId) {
     if (peers[peerId]) return;
 
     const pc = new RTCPeerConnection(rtcConfig);
@@ -160,7 +180,9 @@ function createPeerConnection(peerId, peerName) {
             const nameTag = document.createElement('div');
             nameTag.id = 'name-' + peerId;
             nameTag.className = 'name-tag';
-            nameTag.innerText = peerName;
+
+            // Pull the latest name from the dictionary, fallback to Connecting...
+            nameTag.innerText = peerNames[peerId] || "Connecting...";
 
             wrapper.appendChild(video);
             wrapper.appendChild(nameTag);
@@ -176,9 +198,73 @@ function createPeerConnection(peerId, peerName) {
     };
 }
 
-function setPeerName(peerId, name) {
-    const nameTag = document.getElementById('name-' + peerId);
-    if (nameTag && name) {
-        nameTag.innerText = name;
+// 7. Screen Sharing Logic
+if (shareScreenBtn) {
+    shareScreenBtn.addEventListener('click', async () => {
+        if (!isSharingScreen) {
+            try {
+                // Ask the user for screen permissions
+                screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                const screenTrack = screenStream.getVideoTracks()[0];
+
+                // Swap the webcam track with the screen track for ALL connected peers
+                for (let peerId in peers) {
+                    const sender = peers[peerId].getSenders().find(s => s.track.kind === 'video');
+                    if (sender) {
+                        sender.replaceTrack(screenTrack);
+                    }
+                }
+
+                // Update our local video element to show the screen
+                localVideo.srcObject = screenStream;
+
+                // Update UI
+                isSharingScreen = true;
+                shareScreenBtn.innerText = "Stop Sharing";
+                shareScreenBtn.classList.add("sharing-active");
+
+                // Listen for the native browser "Stop sharing" popup button
+                screenTrack.onended = () => {
+                    stopScreenShare();
+                };
+
+            } catch (error) {
+                console.error("Error sharing screen or user canceled:", error);
+            }
+        } else {
+            // User clicked our custom button to stop sharing
+            stopScreenShare();
+        }
+    });
+}
+
+function stopScreenShare() {
+    if (!isSharingScreen) return;
+
+    // Grab the original webcam video track
+    const webcamTrack = localStream.getVideoTracks()[0];
+
+    // Swap the screen track back to the webcam track for ALL peers
+    for (let peerId in peers) {
+        const sender = peers[peerId].getSenders().find(s => s.track.kind === 'video');
+        if (sender) {
+            sender.replaceTrack(webcamTrack);
+        }
+    }
+
+    // Revert our local video element
+    localVideo.srcObject = localStream;
+
+    // Turn off the screen sharing stream to save memory
+    if (screenStream) {
+        screenStream.getTracks().forEach(track => track.stop());
+        screenStream = null;
+    }
+
+    // Revert UI
+    isSharingScreen = false;
+    if (shareScreenBtn) {
+        shareScreenBtn.innerText = "Share Screen";
+        shareScreenBtn.classList.remove("sharing-active");
     }
 }

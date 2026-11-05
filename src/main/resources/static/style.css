@@ -133,3 +133,19 @@ button:hover {
     pointer-events: none; /* Prevents blocking right-clicks on the video */
     backdrop-filter: blur(2px);
 }
+
+.controls {
+    margin: 15px auto;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+/* Active sharing state (Soft Red) */
+button.sharing-active {
+    background-color: #d9534f;
+}
+
+button.sharing-active:hover {
+    background-color: #c9302c;
+}

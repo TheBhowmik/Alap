@@ -50,15 +50,22 @@ if (!roomId) {
 roomLink.href = window.location.href;
 roomLink.innerText = window.location.href;
 
-// --- Name Entry Modal Logic ---
+// --- Name Entry Modal Logic (Fixed) ---
 joinBtn.addEventListener('click', () => {
-    const val = userNameInput.value.trim();
-    if (val) {
-        myName = val;
-        localNameDisplay.innerText = myName + " (You)";
-        nameModal.style.display = 'none';
-        initApp();
+    let val = userNameInput.value.trim();
+
+    // Fallback to a Guest name if empty instead of failing silently
+    if (!val) {
+        val = "Guest_" + Math.floor(Math.random() * 1000);
     }
+
+    myName = val;
+    if (localNameDisplay) {
+        localNameDisplay.innerText = myName + " (You)";
+    }
+
+    nameModal.style.display = 'none';
+    initApp();
 });
 
 userNameInput.addEventListener('keypress', (e) => {
@@ -90,6 +97,10 @@ function connectWebSocket() {
         }
         else if (data.type === 'user-joined') {
             const peerId = data.id;
+
+            // FIX: Prevent connecting to yourself and creating a ghost box
+            if (peerId === myId) return;
+
             createPeerConnection(peerId);
             const offer = await peers[peerId].createOffer();
             await peers[peerId].setLocalDescription(offer);
@@ -189,6 +200,7 @@ function createPeerConnection(peerId) {
 
             wrapper.appendChild(video);
             wrapper.appendChild(nameTag);
+
             videoGrid.appendChild(wrapper);
         }
         document.getElementById('video-' + peerId).srcObject = event.streams[0];

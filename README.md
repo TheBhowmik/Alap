@@ -1,41 +1,63 @@
 # Alap
 
-Alap is a browser-based group video call application. It uses WebRTC for
-peer-to-peer audio/video and a Spring Boot WebSocket endpoint for signaling.
+Alap is a browser-based group meeting application built with Spring Boot and
+WebRTC. It provides peer-to-peer audio/video, screen sharing, in-call chat, and
+peer-to-peer file sharing. The backend is used for room membership and WebRTC
+signaling; it does not relay meeting media.
+
+## Features
+
+- Room links generated from the `room` query parameter
+- Camera and microphone controls
+- Full-mesh group video calls
+- Screen sharing through WebRTC track replacement
+- In-call text chat through the signaling WebSocket
+- Peer-to-peer file transfer through WebRTC data channels
+- Docker support
 
 ## System architecture
 
-<img width="1048" height="827" alt="Untitled Map - WebRTC Architecture" src="https://github.com/user-attachments/assets/e39406e0-189a-4d3a-bd66-895d782640c0" />
+```mermaid
+flowchart LR
+    A[Participant browser]
+    B[Participant browser]
+    C[Participant browser]
+    S[Spring Boot application]
+    W["WebSocket /signaling"]
+    STUN["Public STUN server"]
 
+    A <-->|"WebRTC media<br/>and files"| B
+    A <-->|"WebRTC media<br/>and files"| C
+    B <-->|"WebRTC media<br/>and files"| C
+    A -->|"signaling and chat"| W
+    B -->|"signaling and chat"| W
+    C -->|"signaling and chat"| W
+    W --- S
+    A -. ICE discovery .-> STUN
+    B -. ICE discovery .-> STUN
+    C -. ICE discovery .-> STUN
+```
 
+The browser clients form a full mesh: every participant maintains one
+`RTCPeerConnection` for every other participant. The signaling server stores
+only in-memory room membership and forwards targeted offers, answers, ICE
+candidates, chat messages, and participant events. Audio/video and file bytes
+remain in the browser-to-browser WebRTC connections.
 
-### Components
-
-- **Browser client** — `index.html`, `style.css`, and `webrtc.js` request
-  camera/microphone access, create `RTCPeerConnection` instances, render remote
-  streams, and exchange signaling messages.
-- **Signaling server** — `SignalingHandler` maintains room membership and
-  forwards messages only to the target WebSocket session in the same room.
-- **WebSocket configuration** — `WebSocketConfig` exposes the `/signaling`
-  endpoint.
-- **Media transport** — audio and video are sent directly between browsers;
-  the server does not process or relay media.
-- **NAT traversal** — clients use `stun:stun.l.google.com:19302` to discover
-  reachable network addresses. No TURN relay is configured.
+See [System Architecture](docs/system-architecture.md) for component
+responsibilities, connection sequencing, deployment boundaries, and scaling
+considerations.
 
 ## Connection flow
 
-1. A user opens the application. If no `room` query parameter exists, the
-   client generates one and updates the URL.
-2. The browser requests camera and microphone permissions, then connects to
+1. The client reads `room` from the URL or generates an eight-character room ID.
+2. The client requests camera and microphone access and opens
    `/signaling?room=<roomId>`.
-3. The server sends an `init` message containing the client's session ID and
-   announces new and departed users to the room.
-4. When a peer joins, clients create WebRTC offers and answers and exchange ICE
-   candidates through the signaling server.
-5. Once negotiation completes, media flows directly between each pair of
-   participants. The topology is a full mesh, so each client maintains one
-   peer connection per remote participant.
+3. The server assigns a WebSocket session ID, adds the session to the room, and
+   broadcasts join/leave events.
+4. Clients exchange SDP offers/answers and ICE candidates through the server.
+5. After negotiation, media flows directly between browsers. Chat uses the
+   signaling channel, while files use a WebRTC data channel.
 
 ## Project structure
 
@@ -107,3 +129,4 @@ so browsers can use secure WebSocket connections.
   establish peer connections.
 - Room state is held in server memory and is lost when the application stops.
 - There is no authentication or authorization for room access.
+- File transfers are limited to 15 MB per file in the browser client.
